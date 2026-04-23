@@ -1,19 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Team VDI Manager - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .vdi-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 15px; align-items: center; padding: 15px 0; border-bottom: 1px solid #f1f5f9; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; width: fit-content; }
+        .Active { background: #dcfce7; color: #166534; }
+        .Offline { background: #f1f5f9; color: #475569; }
+        .Idle { background: #fef9c3; color: #854d0e; }
+        select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🖥️ Live Allocation Dashboard</h3>
+            <small id="sync-status" style="color: #64748b;">Syncing...</small>
+        </div>
+        <div id="vdi-list">Initializing...</div>
+    </div>
+</div>
+
 <script>
-    // FIX: Ensure there is NO /rest/v1/ at the end
     const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co'; 
     const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
-    
-    // Use sbClient to avoid the name conflict error you had earlier
     const sbClient = supabase.createClient(SB_URL, SB_KEY);
 
     async function load() {
-        const { data: vdis, error: vdiError } = await sbClient.from('vdi_tracker').select('*').order('vdi_name');
-        const { data: members, error: memError } = await sbClient.from('team_members').select('name').order('name');
+        // Casing must match your schema: "VDI", "User", "Status"
+        const { data: vdis, error: vError } = await sbClient.from('vdi_tracker').select('*').order('VDI');
+        const { data: members, error: mError } = await sbClient.from('team_members').select('name').order('name');
         
-        if (vdiError || memError) {
-            console.error("Database Error:", vdiError || memError);
-            document.getElementById('sync-status').innerText = "● Connection Error";
-            document.getElementById('sync-status').style.color = "#ef4444";
+        if (vError || mError) {
+            console.error("Database Error:", vError || mError);
             return;
         }
 
@@ -22,16 +49,16 @@
         document.getElementById('vdi-list').innerHTML = vdis.map(v => `
             <div class="vdi-row">
                 <div>
-                    <strong>${v.vdi_name}</strong><br>
-                    <span class="badge ${v.status}">${v.status}</span>
+                    <strong>${v.VDI}</strong><br>
+                    <span class="badge ${v.Status.trim()}">${v.Status}</span>
                 </div>
-                <select onchange="updateVDI(${v.id}, 'user_name', this.value)">
-                    ${teamDropdown.map(u => `<option value="${u}" ${v.user_name === u ? 'selected' : ''}>${u}</option>`).join('')}
+                <select onchange="updateVDI(${v.id}, 'User', this.value)">
+                    ${teamDropdown.map(u => `<option value="${u}" ${v.User === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select>
-                <select onchange="updateVDI(${v.id}, 'status', this.value)">
-                    <option value="Active" ${v.status === 'Active' ? 'selected' : ''}>Active</option>
-                    <option value="Idle" ${v.status === 'Idle' ? 'selected' : ''}>Idle</option>
-                    <option value="Offline" ${v.status === 'Offline' ? 'selected' : ''}>Offline</option>
+                <select onchange="updateVDI(${v.id}, 'Status', this.value)">
+                    <option value="Active" ${v.Status.trim() === 'Active' ? 'selected' : ''}>Active</option>
+                    <option value="Idle" ${v.Status.trim() === 'Idle' ? 'selected' : ''}>Idle</option>
+                    <option value="Offline" ${v.Status.trim() === 'Offline' ? 'selected' : ''}>Offline</option>
                 </select>
                 <button onclick="deleteVDI(${v.id})" style="border:none; background:none; cursor:pointer;">🗑️</button>
             </div>
@@ -41,7 +68,24 @@
         document.getElementById('sync-status').style.color = "#10b981";
     }
 
-    // ... rest of your updateVDI and deleteVDI functions ...
+    async function updateVDI(id, field, val) {
+        let update = { [field]: val };
+        if (field === 'User') {
+            update.Status = (val === 'Available') ? 'Offline' : 'Active';
+        }
+        await sbClient.from('vdi_tracker').update(update).eq('id', id);
+        load();
+    }
+
+    async function deleteVDI(id) {
+        if (confirm("Delete this VDI?")) {
+            await sbClient.from('vdi_tracker').delete().eq('id', id);
+            load();
+        }
+    }
+
     load();
     setInterval(load, 5000); 
 </script>
+</body>
+</html>
