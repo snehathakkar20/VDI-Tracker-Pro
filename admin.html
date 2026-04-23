@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Add VDI</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 40px; }
+        .box { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .msg { color: green; font-size: 0.9em; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>➕ Add New VDI</h2>
+        <input type="text" id="vdiName" placeholder="Enter VDI Hostname">
+        <button id="addBtn">Save to Database</button>
+        <p id="msg" class="msg">Success! Added to database.</p>
+        <hr>
+        <a href="index.html">Go to Dashboard →</a>
+    </div>
+
+    <script>
+        const SB_URL = 'YOUR_SUPABASE_URL'; 
+        const SB_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        document.getElementById('addBtn').addEventListener('click', async () => {
+            const name = document.getElementById('vdiName').value;
+            if(!name) return alert("Type a name!");
+
+            const { error } = await supabase
+                .from('vdi_tracker')
+                .insert([{ vdi_name: name, user_name: 'Available', status: 'Offline' }]);
+
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                document.getElementById('vdiName').value = '';
+                const msg = document.getElementById('msg');
+                msg.style.display = 'block';
+                setTimeout(() => msg.style.display = 'none', 3000);
+            }
+        });
+    </script>
+</body>
+</html>
