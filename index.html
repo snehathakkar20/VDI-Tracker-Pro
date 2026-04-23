@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Team VDI Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .input-group { display: flex; gap: 10px; margin-top: 10px; }
+        input, select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; flex-grow: 1; }
+        .btn { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .vdi-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 15px; align-items: center; padding: 15px 0; border-bottom: 1px solid #f1f5f9; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; width: fit-content; }
+        .Active { background: #dcfce7; color: #166534; }
+        .Offline { background: #f1f5f9; color: #475569; }
+        .Idle { background: #fef9c3; color: #854d0e; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h3>➕ Add New VDI to Database</h3>
+        <div class="input-group">
+            <input type="text" id="vdiIn" placeholder="VDI Name (e.g. VDI-UX-01)">
+            <button class="btn" onclick="addVDI()">Add VDI</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🖥️ Live Allocation Dashboard</h3>
+            <small id="sync-status" style="color: #10b981;">● Synchronized</small>
+        </div>
+        <div id="vdi-list">Initializing...</div>
+    </div>
+</div>
+
+<script>
+    const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co/rest/v1/'; 
+    const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
+    const supabase = supabase.createClient(SB_URL, SB_KEY);
+
+    // Update this list with your team's names
+    const team = ["Available", "User A", "User B", "User C"];
+
+    async function addVDI() {
+        const name = document.getElementById('vdiIn').value;
+        if (!name) return;
+        await supabase.from('vdi_tracker').insert([{ vdi_name: name, user_name: 'Available', status: 'Offline' }]);
+        document.getElementById('vdiIn').value = '';
+        load();
+    }
+
+    async function updateVDI(id, field, val) {
+        let update = { [field]: val };
+        if (field === 'user_name') update.status = (val === 'Available') ? 'Offline' : 'Active';
+        await supabase.from('vdi_tracker').update(update).eq('id', id);
+        load();
+    }
+
+    async function deleteVDI(id) {
+        if (confirm("Delete this VDI?")) {
+            await supabase.from('vdi_tracker').delete().eq('id', id);
+            load();
+        }
+    }
+
+    async function load() {
+        const { data } = await supabase.from('vdi_tracker').select('*').order('vdi_name');
+        if (!data) return;
+        document.getElementById('vdi-list').innerHTML = data.map(v => `
+            <div class="vdi-row">
+                <div>
+                    <strong>${v.vdi_name}</strong><br>
+                    <span class="badge ${v.status}">${v.status}</span>
+                </div>
+                <select onchange="updateVDI(${v.id}, 'user_name', this.value)">
+                    ${team.map(u => `<option value="${u}" ${v.user_name === u ? 'selected' : ''}>${u}</option>`).join('')}
+                </select>
+                <select onchange="updateVDI(${v.id}, 'status', this.value)">
+                    <option value="Active" ${v.status === 'Active' ? 'selected' : ''}>Active</option>
+                    <option value="Idle" ${v.status === 'Idle' ? 'selected' : ''}>Idle</option>
+                    <option value="Offline" ${v.status === 'Offline' ? 'selected' : ''}>Offline</option>
+                </select>
+                <button onclick="deleteVDI(${v.id})" style="border:none; background:none; cursor:pointer;">🗑️</button>
+            </div>
+        `).join('');
+    }
+
+    load();
+    setInterval(load, 5000); // Live sync every 5 seconds
+</script>
+</body>
+</html>
