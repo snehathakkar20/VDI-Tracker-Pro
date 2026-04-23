@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin Panel - VDI Nexus</title>
+    <title>Admin Panel - VDI Manager</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background: #f1f5f9; padding: 30px; display: flex; gap: 20px; }
-        .box { background: white; padding: 20px; border-radius: 12px; flex: 1; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        h3 { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-        input { width: calc(100% - 22px); padding: 10px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 6px; }
-        button { background: #2563eb; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
-        .list-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .del-btn { color: #ef4444; cursor: pointer; font-weight: bold; border: none; background: none; }
+        .box { background: white; padding: 25px; border-radius: 12px; flex: 1; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h3 { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0; }
+        input { width: calc(100% - 24px); padding: 12px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 6px; }
+        button { background: #2563eb; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+        .list-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .del-btn { color: #ef4444; cursor: pointer; font-weight: bold; border: none; background: none; font-size: 1.1em; }
     </style>
 </head>
 <body>
@@ -30,57 +30,54 @@
     </div>
 
 <script>
+    // FIX: URL corrected (removed /rest/v1/)
     const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co'; 
     const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
-
-    // CHANGE: Use 'sbClient' instead of 'supabase'
+    
+    // FIX: Renamed variable to sbClient to avoid conflict
     const sbClient = supabase.createClient(SB_URL, SB_KEY);
 
-    async function load() {
-        // Fetch from vdi_tracker table
-        const { data: vdis } = await sbClient.from('vdi_tracker').select('*').order('vdi_name');
-        // Fetch from team_members table
-        const { data: members } = await sbClient.from('team_members').select('name').order('name');
+    async function addItem(table, inputId, col) {
+        const val = document.getElementById(inputId).value;
+        if(!val) return;
         
-        if (!vdis || !members) return;
+        let payload = { [col]: val };
+        // Set defaults for new VDIs
+        if (table === 'vdi_tracker') {
+            payload.user_name = 'Available';
+            payload.status = 'Offline';
+        }
 
-        const userList = ["Available", ...members.map(m => m.name)];
-
-        document.getElementById('vdi-list').innerHTML = vdis.map(v => `
-            <div class="vdi-row">
-                <div>
-                    <strong>${v.vdi_name}</strong><br>
-                    <span class="badge ${v.status}">${v.status}</span>
-                </div>
-                <select onchange="updateVDI(${v.id}, 'user_name', this.value)">
-                    ${userList.map(u => `<option value="${u}" ${v.user_name === u ? 'selected' : ''}>${u}</option>`).join('')}
-                </select>
-                <select onchange="updateVDI(${v.id}, 'status', this.value)">
-                    <option value="Active" ${v.status === 'Active' ? 'selected' : ''}>Active</option>
-                    <option value="Idle" ${v.status === 'Idle' ? 'selected' : ''}>Idle</option>
-                    <option value="Offline" ${v.status === 'Offline' ? 'selected' : ''}>Offline</option>
-                </select>
-                <button onclick="deleteVDI(${v.id})" style="border:none; background:none; cursor:pointer;">🗑️</button>
-            </div>
-        `).join('');
+        await sbClient.from(table).insert([payload]);
+        document.getElementById(inputId).value = '';
+        fetchLists();
     }
 
-    async function updateVDI(id, field, val) {
-        let update = { [field]: val };
-        if (field === 'user_name') update.status = (val === 'Available') ? 'Offline' : 'Active';
-        await sbClient.from('vdi_tracker').update(update).eq('id', id);
-        load();
-    }
-
-    async function deleteVDI(id) {
-        if (confirm("Delete this VDI?")) {
-            await sbClient.from('vdi_tracker').delete().eq('id', id);
-            load();
+    async function deleteItem(table, id) {
+        if(confirm("Delete this?")) {
+            await sbClient.from(table).delete().eq('id', id);
+            fetchLists();
         }
     }
 
-    load();
-    setInterval(load, 5000); 
+    async function fetchLists() {
+        const { data: users } = await sbClient.from('team_members').select('*').order('name');
+        const { data: vdis } = await sbClient.from('vdi_tracker').select('*').order('vdi_name');
+
+        if(users) {
+            document.getElementById('userList').innerHTML = users.map(u => `
+                <div class="list-item"><span>${u.name}</span> <button class="del-btn" onclick="deleteItem('team_members', ${u.id})">✕</button></div>
+            `).join('');
+        }
+
+        if(vdis) {
+            document.getElementById('vdiList').innerHTML = vdis.map(v => `
+                <div class="list-item"><span>${v.vdi_name}</span> <button class="del-btn" onclick="deleteItem('vdi_tracker', ${v.id})">✕</button></div>
+            `).join('');
+        }
+    }
+
+    fetchLists();
 </script>
 </body>
 </html>
