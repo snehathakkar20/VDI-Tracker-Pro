@@ -1,93 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>VDI Nexus Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Team VDI Manager - Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; padding: 20px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; }
-        .vdi-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 15px; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9; }
-        .vdi-name { font-weight: bold; color: #1e293b; }
-        .status-tag { font-size: 0.8em; font-weight: bold; color: #16a34a; background: #dcfce7; padding: 4px 8px; border-radius: 4px; }
-        select { padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; }
-        .save-btn { background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
-        .save-btn:hover { background: #059669; }
-        .timestamp { font-size: 0.75em; color: #94a3b8; }
-        .footer { text-align: center; margin-top: 30px; font-weight: bold; color: #64748b; }
+        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .vdi-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 15px; align-items: center; padding: 15px 0; border-bottom: 1px solid #f1f5f9; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; width: fit-content; }
+        .Active { background: #dcfce7; color: #166534; }
+        .Offline { background: #f1f5f9; color: #475569; }
+        .Idle { background: #fef9c3; color: #854d0e; }
+        select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <h2>🖥️ VDI Live Dashboard</h2>
-        <div style="color: #10b981; font-weight: bold;">● Active System</div>
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🖥️ Live Allocation Dashboard</h3>
+            <small id="sync-status" style="color: #64748b;">Syncing...</small>
+        </div>
+        <div id="vdi-list">Initializing...</div>
     </div>
-    
-    <div id="vdi-display">Syncing...</div>
-    
-    <div class="footer">Created by Sneha Thakkar</div>
 </div>
 
 <script>
-    const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co/rest/v1/'; 
+    const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co'; 
     const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
-    const supabase = supabase.createClient(SB_URL, SB_KEY);
+    const sbClient = supabase.createClient(SB_URL, SB_KEY);
 
-    async function loadData() {
-        const { data: users } = await supabase.from('team_members').select('name').order('name');
-        const { data: vdis } = await supabase.from('vdi_tracker').select('*').order('vdi_name');
+    async function load() {
+        // Fetch current VDI status and the Team Member list from the database
+        const { data: vdis } = await sbClient.from('vdi_tracker').select('*').order('vdi_name');
+        const { data: members } = await sbClient.from('team_members').select('name').order('name');
         
-        if (vdis && users) render(vdis, users.map(u => u.name));
+        if (!vdis) return;
+
+        // Build user list from database + "Available" option
+        const teamDropdown = ["Available", ...(members ? members.map(m => m.name) : [])];
+
+        document.getElementById('vdi-list').innerHTML = vdis.map(v => `
+            <div class="vdi-row">
+                <div>
+                    <strong>${v.vdi_name}</strong><br>
+                    <span class="badge ${v.status}">${v.status}</span>
+                </div>
+                <select onchange="updateVDI(${v.id}, 'user_name', this.value)">
+                    ${teamDropdown.map(u => `<option value="${u}" ${v.user_name === u ? 'selected' : ''}>${u}</option>`).join('')}
+                </select>
+                <select onchange="updateVDI(${v.id}, 'status', this.value)">
+                    <option value="Active" ${v.status === 'Active' ? 'selected' : ''}>Active</option>
+                    <option value="Idle" ${v.status === 'Idle' ? 'selected' : ''}>Idle</option>
+                    <option value="Offline" ${v.status === 'Offline' ? 'selected' : ''}>Offline</option>
+                </select>
+                <button onclick="deleteVDI(${v.id})" style="border:none; background:none; cursor:pointer;">🗑️</button>
+            </div>
+        `).join('');
+        
+        document.getElementById('sync-status').innerText = "● Synchronized";
+        document.getElementById('sync-status').style.color = "#10b981";
     }
 
-    async function saveChange(id, selectId) {
-        const selectedUser = document.getElementById(selectId).value;
-        const now = new Date().toLocaleString();
+    async function updateVDI(id, field, val) {
+        let update = { [field]: val };
+        // If a user is selected, mark as Active. If set back to Available, mark Offline.
+        if (field === 'user_name') {
+            update.status = (val === 'Available') ? 'Offline' : 'Active';
+        }
+        await sbClient.from('vdi_tracker').update(update).eq('id', id);
+        load();
+    }
 
-        const { error } = await supabase
-            .from('vdi_tracker')
-            .update({ 
-                user_name: selectedUser, 
-                updated_at: new Date().toISOString() 
-            })
-            .eq('id', id);
-
-        if(!error) {
-            alert(`Saved: ${selectedUser} assigned.`);
-            loadData();
+    async function deleteVDI(id) {
+        if (confirm("Delete this VDI?")) {
+            await sbClient.from('vdi_tracker').delete().eq('id', id);
+            load();
         }
     }
 
-    function render(vdis, team) {
-        const container = document.getElementById('vdi-display');
-        container.innerHTML = vdis.map(v => `
-            <div class="vdi-grid">
-                <div>
-                    <span class="vdi-name">${v.vdi_name}</span><br>
-                    <span class="status-tag">${v.status}</span>
-                </div>
-                <div>
-                    <select id="userSelect_${v.id}">
-                        <option value="Available" ${v.user_name === 'Available' ? 'selected' : ''}>-- Select User --</option>
-                        ${team.filter(t => t !== 'Available').map(u => `
-                            <option value="${u}" ${v.user_name === u ? 'selected' : ''}>${u}</option>
-                        `).join('')}
-                    </select>
-                </div>
-                <div class="timestamp">
-                    Last Update:<br>${new Date(v.updated_at).toLocaleTimeString()}
-                </div>
-                <div>
-                    <button class="save-btn" onclick="saveChange(${v.id}, 'userSelect_${v.id}')">Save</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    loadData();
-    setInterval(loadData, 10000); // Auto-refresh every 10 seconds
+    load();
+    setInterval(load, 5000); 
 </script>
 </body>
 </html>
