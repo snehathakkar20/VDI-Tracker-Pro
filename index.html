@@ -5,28 +5,82 @@
     <title>Team VDI Manager - Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
-        .container { max-width: 900px; margin: auto; }
-        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .vdi-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 15px; align-items: center; padding: 15px 0; border-bottom: 1px solid #f1f5f9; }
-        .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; width: fit-content; }
-        .Active { background: #dcfce7; color: #166534; }
-        .Offline { background: #f1f5f9; color: #475569; }
-        .Idle { background: #fef9c3; color: #854d0e; }
-        select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; }
+        :root { 
+            --bg: #ffffff; 
+            --header-text: #1e293b; 
+            --border: #e2e8f0;
+            --active-bg: #dcfce7; --active-text: #166534;
+            --idle-bg: #fef9c3; --idle-text: #854d0e;
+            --maintenance-bg: #fee2e2; --maintenance-text: #991b1b;
+            --offline-bg: #f1f5f9; --offline-text: #475569;
+        }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; padding: 40px; color: #334155; }
+        .container { max-width: 1000px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        /* Table Header */
+        .vdi-header { 
+            display: grid; 
+            grid-template-columns: 2fr 1.5fr 1fr auto; 
+            padding: 16px 24px; 
+            background: white; 
+            border-bottom: 2px solid var(--border);
+            font-weight: 700;
+            color: var(--header-text);
+            font-size: 1.1rem;
+        }
+
+        /* Table Rows */
+        .vdi-row { 
+            display: grid; 
+            grid-template-columns: 2fr 1.5fr 1fr auto; 
+            padding: 20px 24px; 
+            align-items: center; 
+            border-bottom: 1px solid var(--border); 
+            transition: background 0.2s;
+        }
+        .vdi-row:hover { background: #fbfcfd; }
+        .vdi-name { font-weight: 600; color: #1e293b; font-size: 1.05rem; }
+
+        /* Dropdowns */
+        select { 
+            padding: 10px 12px; 
+            border: 1px solid #cbd5e1; 
+            border-radius: 6px; 
+            width: 90%; 
+            font-size: 0.95rem; 
+            color: #334155;
+            background-color: white;
+        }
+
+        /* Status Badges */
+        .badge { 
+            padding: 6px 14px; 
+            border-radius: 20px; 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            width: fit-content; 
+            text-align: center;
+        }
+        .Active { background: var(--active-bg); color: var(--active-text); }
+        .Idle { background: var(--idle-bg); color: var(--idle-text); }
+        .Maintenance { background: var(--maintenance-bg); color: var(--maintenance-text); }
+        .Offline { background: var(--offline-bg); color: var(--offline-text); }
+
+        .del-btn { border: none; background: none; cursor: pointer; font-size: 1.2rem; opacity: 0.4; transition: 0.2s; }
+        .del-btn:hover { opacity: 1; color: #ef4444; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>🖥️ Live Allocation Dashboard</h3>
-            <small id="sync-status" style="color: #64748b;">Syncing...</small>
-        </div>
-        <div id="vdi-list">Initializing...</div>
+    <div class="vdi-header">
+        <div>VDI Name</div>
+        <div>Assigned User</div>
+        <div>Status</div>
+        <div></div>
     </div>
+    <div id="vdi-list">
+        </div>
 </div>
 
 <script>
@@ -35,43 +89,38 @@
     const sbClient = supabase.createClient(SB_URL, SB_KEY);
 
     async function load() {
-        // Casing must match your schema: "VDI", "User", "Status"
         const { data: vdis, error: vError } = await sbClient.from('vdi_tracker').select('*').order('VDI');
         const { data: members, error: mError } = await sbClient.from('team_members').select('name').order('name');
         
-        if (vError || mError) {
-            console.error("Database Error:", vError || mError);
-            return;
-        }
+        if (!vdis) return;
 
-        const teamDropdown = ["Available", ...(members ? members.map(m => m.name) : [])];
+        const teamDropdown = ["Unassigned", ...(members ? members.map(m => m.name) : [])];
 
-        document.getElementById('vdi-list').innerHTML = vdis.map(v => `
+        document.getElementById('vdi-list').innerHTML = vdis.map(v => {
+            // Clean up status strings (remove trailing spaces)
+            const cleanStatus = v.Status.trim();
+            
+            return `
             <div class="vdi-row">
+                <div class="vdi-name">${v.VDI}</div>
                 <div>
-                    <strong>${v.VDI}</strong><br>
-                    <span class="badge ${v.Status.trim()}">${v.Status}</span>
+                    <select onchange="updateVDI(${v.id}, 'User', this.value)">
+                        ${teamDropdown.map(u => `<option value="${u}" ${v.User === u ? 'selected' : ''}>${u}</option>`).join('')}
+                    </select>
                 </div>
-                <select onchange="updateVDI(${v.id}, 'User', this.value)">
-                    ${teamDropdown.map(u => `<option value="${u}" ${v.User === u ? 'selected' : ''}>${u}</option>`).join('')}
-                </select>
-                <select onchange="updateVDI(${v.id}, 'Status', this.value)">
-                    <option value="Active" ${v.Status.trim() === 'Active' ? 'selected' : ''}>Active</option>
-                    <option value="Idle" ${v.Status.trim() === 'Idle' ? 'selected' : ''}>Idle</option>
-                    <option value="Offline" ${v.Status.trim() === 'Offline' ? 'selected' : ''}>Offline</option>
-                </select>
-                <button onclick="deleteVDI(${v.id})" style="border:none; background:none; cursor:pointer;">🗑️</button>
+                <div>
+                    <span class="badge ${cleanStatus}">${cleanStatus}</span>
+                </div>
+                <button class="del-btn" onclick="deleteVDI(${v.id})">🗑️</button>
             </div>
-        `).join('');
-        
-        document.getElementById('sync-status').innerText = "● Synchronized";
-        document.getElementById('sync-status').style.color = "#10b981";
+        `}).join('');
     }
 
     async function updateVDI(id, field, val) {
         let update = { [field]: val };
+        // If assigned, set to Active; If unassigned, set to Idle
         if (field === 'User') {
-            update.Status = (val === 'Available') ? 'Offline' : 'Active';
+            update.Status = (val === 'Unassigned') ? 'Idle' : 'Active';
         }
         await sbClient.from('vdi_tracker').update(update).eq('id', id);
         load();
