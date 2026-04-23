@@ -1,48 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin - Add VDI</title>
+    <title>Admin Panel - VDI Nexus</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 40px; }
-        .box { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .msg { color: green; font-size: 0.9em; margin-top: 10px; display: none; }
+        body { font-family: 'Inter', sans-serif; background: #f1f5f9; padding: 30px; display: flex; gap: 20px; }
+        .box { background: white; padding: 20px; border-radius: 12px; flex: 1; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h3 { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        input { width: calc(100% - 22px); padding: 10px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 6px; }
+        button { background: #2563eb; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+        .list-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .del-btn { color: #ef4444; cursor: pointer; font-weight: bold; border: none; background: none; }
     </style>
 </head>
 <body>
+
     <div class="box">
-        <h2>➕ Add New VDI</h2>
-        <input type="text" id="vdiName" placeholder="Enter VDI Hostname">
-        <button id="addBtn">Save to Database</button>
-        <p id="msg" class="msg">Success! Added to database.</p>
-        <hr>
-        <a href="index.html">Go to Dashboard →</a>
+        <h3>👥 Manage Users</h3>
+        <input type="text" id="userInput" placeholder="User Name">
+        <button onclick="addItem('team_members', 'userInput', 'name')">Add User</button>
+        <div id="userList" style="margin-top:20px;"></div>
     </div>
 
-    <script>
-        const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co/rest/v1/'; 
-        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
-        const supabase = supabase.createClient(SB_URL, SB_KEY);
+    <div class="box">
+        <h3>🖥️ Manage VDIs</h3>
+        <input type="text" id="vdiInput" placeholder="VDI Name">
+        <button onclick="addItem('vdi_tracker', 'vdiInput', 'vdi_name')">Add VDI</button>
+        <div id="vdiList" style="margin-top:20px;"></div>
+    </div>
 
-        document.getElementById('addBtn').addEventListener('click', async () => {
-            const name = document.getElementById('vdiName').value;
-            if(!name) return alert("Type a name!");
+<script>
+    const SB_URL = 'https://fcwhiqvwbkvzrjiiokib.supabase.co/rest/v1/'; 
+    const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjd2hpcXZ3Ymt2enJqaWlva2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjYxNTYsImV4cCI6MjA5MjUwMjE1Nn0.8hqi3pHOgVMZ943yzwslSrrwNjgDH6PHK7L677HPDDM';
+    const supabase = supabase.createClient(SB_URL, SB_KEY);
 
-            const { error } = await supabase
-                .from('vdi_tracker')
-                .insert([{ vdi_name: name, user_name: 'Available', status: 'Offline' }]);
+    async function addItem(table, inputId, col) {
+        const val = document.getElementById(inputId).value;
+        if(!val) return;
+        await supabase.from(table).insert([{ [col]: val }]);
+        document.getElementById(inputId).value = '';
+        fetchLists();
+    }
 
-            if (error) {
-                alert("Error: " + error.message);
-            } else {
-                document.getElementById('vdiName').value = '';
-                const msg = document.getElementById('msg');
-                msg.style.display = 'block';
-                setTimeout(() => msg.style.display = 'none', 3000);
-            }
-        });
-    </script>
+    async function deleteItem(table, id) {
+        if(confirm("Delete this?")) {
+            await supabase.from(table).delete().eq('id', id);
+            fetchLists();
+        }
+    }
+
+    async function fetchLists() {
+        const { data: users } = await supabase.from('team_members').select('*').order('name');
+        const { data: vdis } = await supabase.from('vdi_tracker').select('*').order('vdi_name');
+
+        document.getElementById('userList').innerHTML = users.map(u => `
+            <div class="list-item">${u.name} <button class="del-btn" onclick="deleteItem('team_members', ${u.id})">✕</button></div>
+        `).join('');
+
+        document.getElementById('vdiList').innerHTML = vdis.map(v => `
+            <div class="list-item">${v.vdi_name} <button class="del-btn" onclick="deleteItem('vdi_tracker', ${v.id})">✕</button></div>
+        `).join('');
+    }
+
+    fetchLists();
+</script>
 </body>
 </html>
